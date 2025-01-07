@@ -4,82 +4,79 @@ import sys
 import math
 import random
 
-# Define colors
-COLOR_BLUE = (0, 0, 255)
-COLOR_BLACK = (0, 0, 0)
-COLOR_RED = (255, 0, 0)
-COLOR_YELLOW = (255, 255, 0)
+# Define new colors
+GRID_COLOR = (50, 50, 150)
+BACKGROUND_COLOR = (10, 10, 30)
+PLAYER1_COLOR = (200, 0, 50)
+PLAYER2_COLOR = (250, 200, 0)
+EMPTY_COLOR = (30, 30, 30)
 
-# Define grid dimensions
+# Grid dimensions
 GRID_ROWS = 6
 GRID_COLUMNS = 7
 
 # Piece definitions
-HUMAN = 0
-COMPUTER = 1
-NO_PIECE = 0
-HUMAN_PIECE = 1
-COMPUTER_PIECE = 2
+PLAYER1 = 0
+PLAYER2 = 1
+EMPTY_SLOT = 0
+PLAYER1_PIECE = 1
+PLAYER2_PIECE = 2
 
-# Connection length for winning
-CONNECTION = 4
+# Winning length
+WIN_LENGTH = 4
 
 # Pygame settings
-SQUARE_SIZE = 100
-RADIUS = int(SQUARE_SIZE / 2 - 5)
-WIDTH = GRID_COLUMNS * SQUARE_SIZE
-HEIGHT = (GRID_ROWS + 1) * SQUARE_SIZE
-SCREEN_SIZE = (WIDTH, HEIGHT)
+CELL_SIZE = 100
+GRID_WIDTH = GRID_COLUMNS * CELL_SIZE
+GRID_HEIGHT = GRID_ROWS * CELL_SIZE
+SCREEN_HEIGHT = GRID_HEIGHT + CELL_SIZE
+SCREEN_WIDTH = GRID_WIDTH
+PIECE_RADIUS = CELL_SIZE // 2 - 10  # Slightly smaller than half the cell size
 
 
 def initialize_grid():
     return np.zeros((GRID_ROWS, GRID_COLUMNS))
 
 
-def place_piece(grid, row, col, piece_type):
-    grid[row][col] = piece_type
+def place_piece(grid, row, col, piece):
+    grid[row][col] = piece
 
 
 def is_column_available(grid, col):
-    return grid[GRID_ROWS - 1][col] == NO_PIECE
+    return grid[GRID_ROWS - 1][col] == EMPTY_SLOT
 
 
-def get_row_for_piece(grid, col):
+def get_next_open_row(grid, col):
     for r in range(GRID_ROWS):
-        if grid[r][col] == NO_PIECE:
+        if grid[r][col] == EMPTY_SLOT:
             return r
 
 
-def has_winning_combination(grid, piece):
+def check_win(grid, piece):
     # Horizontal
     for col in range(GRID_COLUMNS - 3):
         for row in range(GRID_ROWS):
-            if all(grid[row][col + i] == piece for i in range(CONNECTION)):
+            if all(grid[row][col + i] == piece for i in range(WIN_LENGTH)):
                 return True
+
     # Vertical
     for col in range(GRID_COLUMNS):
         for row in range(GRID_ROWS - 3):
-            if all(grid[row + i][col] == piece for i in range(CONNECTION)):
+            if all(grid[row + i][col] == piece for i in range(WIN_LENGTH)):
                 return True
-    # Positive diagonal
+
+    # Diagonals
     for col in range(GRID_COLUMNS - 3):
         for row in range(GRID_ROWS - 3):
-            if all(grid[row + i][col + i] == piece for i in range(CONNECTION)):
+            if all(grid[row + i][col + i] == piece for i in range(WIN_LENGTH)):
                 return True
-    # Negative diagonal
+
     for col in range(GRID_COLUMNS - 3):
         for row in range(3, GRID_ROWS):
-            if all(grid[row - i][col + i] == piece for i in range(CONNECTION)):
+            if all(grid[row - i][col + i] == piece for i in range(WIN_LENGTH)):
                 return True
+
     return False
-
-
-def calculate_score(grid, piece):
-    score = 0
-    center_column = [int(i) for i in list(grid[:, GRID_COLUMNS // 2])]
-    center_count = center_column.count(piece)
-    score += center_count * 3
-    return score
 
 
 def get_valid_columns(grid):
@@ -88,117 +85,103 @@ def get_valid_columns(grid):
 
 def minimax(grid, depth, alpha, beta, maximizing):
     valid_columns = get_valid_columns(grid)
-    is_terminal = has_winning_combination(grid, HUMAN_PIECE) or has_winning_combination(grid, COMPUTER_PIECE) or len(valid_columns) == 0
+    is_terminal = check_win(grid, PLAYER1_PIECE) or check_win(grid, PLAYER2_PIECE) or len(valid_columns) == 0
+
     if depth == 0 or is_terminal:
         if is_terminal:
-            if has_winning_combination(grid, COMPUTER_PIECE):
+            if check_win(grid, PLAYER2_PIECE):
                 return None, float('inf')
-            elif has_winning_combination(grid, HUMAN_PIECE):
+            elif check_win(grid, PLAYER1_PIECE):
                 return None, float('-inf')
             else:
                 return None, 0
-        return None, calculate_score(grid, COMPUTER_PIECE)
+        return None, calculate_score(grid, PLAYER2_PIECE)
 
     if maximizing:
         value = -float('inf')
-        best_column = random.choice(valid_columns)
+        column = random.choice(valid_columns)
         for col in valid_columns:
             temp_grid = grid.copy()
-            row = get_row_for_piece(temp_grid, col)
-            place_piece(temp_grid, row, col, COMPUTER_PIECE)
+            row = get_next_open_row(temp_grid, col)
+            place_piece(temp_grid, row, col, PLAYER2_PIECE)
             _, new_score = minimax(temp_grid, depth - 1, alpha, beta, False)
             if new_score > value:
                 value = new_score
-                best_column = col
+                column = col
             alpha = max(alpha, value)
             if alpha >= beta:
                 break
-        return best_column, value
+        return column, value
     else:
         value = float('inf')
-        best_column = random.choice(valid_columns)
+        column = random.choice(valid_columns)
         for col in valid_columns:
             temp_grid = grid.copy()
-            row = get_row_for_piece(temp_grid, col)
-            place_piece(temp_grid, row, col, HUMAN_PIECE)
+            row = get_next_open_row(temp_grid, col)
+            place_piece(temp_grid, row, col, PLAYER1_PIECE)
             _, new_score = minimax(temp_grid, depth - 1, alpha, beta, True)
             if new_score < value:
                 value = new_score
-                best_column = col
+                column = col
             beta = min(beta, value)
             if alpha >= beta:
                 break
-        return best_column, value
+        return column, value
+
+
+def calculate_score(grid, piece):
+    center_col = [int(i) for i in list(grid[:, GRID_COLUMNS // 2])]
+    return center_col.count(piece) * 3
 
 
 def draw_grid(grid, screen):
+    screen.fill(BACKGROUND_COLOR)
     for col in range(GRID_COLUMNS):
         for row in range(GRID_ROWS):
-            pygame.draw.rect(screen, COLOR_BLUE, (col * SQUARE_SIZE, row * SQUARE_SIZE + SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE))
-            pygame.draw.circle(screen, COLOR_BLACK, (col * SQUARE_SIZE + SQUARE_SIZE // 2, row * SQUARE_SIZE + SQUARE_SIZE + SQUARE_SIZE // 2), RADIUS)
+            pygame.draw.rect(screen, GRID_COLOR, (col * CELL_SIZE, row * CELL_SIZE + CELL_SIZE, CELL_SIZE, CELL_SIZE))
+            pygame.draw.circle(screen, EMPTY_COLOR, (col * CELL_SIZE + CELL_SIZE // 2, row * CELL_SIZE + CELL_SIZE + CELL_SIZE // 2), PIECE_RADIUS)
     for col in range(GRID_COLUMNS):
         for row in range(GRID_ROWS):
-            if grid[row][col] == HUMAN_PIECE:
-                pygame.draw.circle(screen, COLOR_RED, (col * SQUARE_SIZE + SQUARE_SIZE // 2, HEIGHT - (row * SQUARE_SIZE + SQUARE_SIZE // 2)), RADIUS)
-            elif grid[row][col] == COMPUTER_PIECE:
-                pygame.draw.circle(screen, COLOR_YELLOW, (col * SQUARE_SIZE + SQUARE_SIZE // 2, HEIGHT - (row * SQUARE_SIZE + SQUARE_SIZE // 2)), RADIUS)
+            if grid[row][col] == PLAYER1_PIECE:
+                pygame.draw.circle(screen, PLAYER1_COLOR, (col * CELL_SIZE + CELL_SIZE // 2, SCREEN_HEIGHT - (row * CELL_SIZE + CELL_SIZE // 2)), PIECE_RADIUS)
+            elif grid[row][col] == PLAYER2_PIECE:
+                pygame.draw.circle(screen, PLAYER2_COLOR, (col * CELL_SIZE + CELL_SIZE // 2, SCREEN_HEIGHT - (row * CELL_SIZE + CELL_SIZE // 2)), PIECE_RADIUS)
     pygame.display.update()
 
 
 # Initialize game
 pygame.init()
-screen = pygame.display.set_mode(SCREEN_SIZE)
-pygame.display.set_caption("Connect 4")
-font = pygame.font.SysFont("monospace", 75)
-
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+pygame.display.set_caption("Connect 4 (Aligned)")
 grid = initialize_grid()
-draw_grid(grid, screen)
 game_over = False
-turn = random.randint(HUMAN, COMPUTER)
+turn = random.randint(PLAYER1, PLAYER2)
+
+draw_grid(grid, screen)
 
 while not game_over:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             sys.exit()
-
-        if event.type == pygame.MOUSEMOTION:
-            pygame.draw.rect(screen, COLOR_BLACK, (0, 0, WIDTH, SQUARE_SIZE))
-            posx = event.pos[0]
-            if turn == HUMAN:
-                pygame.draw.circle(screen, COLOR_RED, (posx, SQUARE_SIZE // 2), RADIUS)
-            pygame.display.update()
-
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            pygame.draw.rect(screen, COLOR_BLACK, (0, 0, WIDTH, SQUARE_SIZE))
-            if turn == HUMAN:
-                posx = event.pos[0]
-                col = int(math.floor(posx / SQUARE_SIZE))
+        if turn == PLAYER1 and not game_over:
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                col = event.pos[0] // CELL_SIZE
                 if is_column_available(grid, col):
-                    row = get_row_for_piece(grid, col)
-                    place_piece(grid, row, col, HUMAN_PIECE)
-
-                    if has_winning_combination(grid, HUMAN_PIECE):
-                        label = font.render("Player 1 wins!", True, COLOR_RED)
-                        screen.blit(label, (40, 10))
+                    row = get_next_open_row(grid, col)
+                    place_piece(grid, row, col, PLAYER1_PIECE)
+                    if check_win(grid, PLAYER1_PIECE):
+                        print("Player 1 wins!")
                         game_over = True
-
-                    turn = (turn + 1) % 2
+                    turn = PLAYER2
                     draw_grid(grid, screen)
 
-    if turn == COMPUTER and not game_over:
-        col, _ = minimax(grid, 5, -float('inf'), float('inf'), True)
-        if is_column_available(grid, col):
-            pygame.time.wait(500)
-            row = get_row_for_piece(grid, col)
-            place_piece(grid, row, col, COMPUTER_PIECE)
-
-            if has_winning_combination(grid, COMPUTER_PIECE):
-                label = font.render("Player 2 wins!", True, COLOR_YELLOW)
-                screen.blit(label, (40, 10))
-                game_over = True
-
-            turn = (turn + 1) % 2
-            draw_grid(grid, screen)
-
-    if game_over:
-        pygame.time.wait(3000)
+        elif turn == PLAYER2 and not game_over:
+            col, _ = minimax(grid, 4, -float('inf'), float('inf'), True)
+            if is_column_available(grid, col):
+                row = get_next_open_row(grid, col)
+                place_piece(grid, row, col, PLAYER2_PIECE)
+                if check_win(grid, PLAYER2_PIECE):
+                    print("Player 2 wins!")
+                    game_over = True
+                turn = PLAYER1
+                draw_grid(grid, screen)
